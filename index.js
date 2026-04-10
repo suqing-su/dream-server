@@ -24,7 +24,7 @@ function sendWeChat(title, content) {
 async function askClaude(events) {
   const summary = events.map(r => `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`).join('\n');
   const body = JSON.stringify({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 200,
     messages: [{
       role: 'user',
@@ -45,9 +45,13 @@ async function askClaude(events) {
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
-          const json = JSON.parse(data);
-          resolve(json.content[0].text);
-        } catch { resolve('看不出来在干嘛'); }
+    const json = JSON.parse(data);
+    console.log('API返回:', JSON.stringify(json));
+    resolve(json.content[0].text);
+} catch(e) {
+    console.log('解析失败，原始data:', data);
+    resolve('解析失败');
+}
       });
     });
     req.write(body);
