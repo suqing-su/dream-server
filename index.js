@@ -12,11 +12,47 @@ const pool = new Pool({
 });
 
 const SENDKEY = process.env.SENDKEY;
+const CLAUDE_KEY = process.env.CLAUDE_KEY;
+const CLAUDE_API = 'https://api.gemai.cc/v1/messages';
 
 function sendWeChat(title, content) {
   const params = new URLSearchParams({ title, desp: content });
   const url = `https://sctapi.ftqq.com/${SENDKEY}.send?${params}`;
   https.get(url, () => {});
+}
+
+async function askClaude(events) {
+  const summary = events.map(r => `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`).join('\n');
+  const body = JSON.stringify({
+    model: 'claude-haiku-4-5',
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `苏清最近的手机使用记录：\n${summary}\n\n用一句话自然地评论一下她在干嘛，口吻像男友，简短。`
+    }]
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request('https://api.gemai.cc/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01'
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.content[0].text);
+        } catch { resolve('看不出来在干嘛'); }
+      });
+    });
+    req.write(body);
+    req.end();
+  });
 }
 
 async function initDB() {
@@ -28,32 +64,26 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  console.log('数据库初始化完成');
 }
 
 app.get('/api/event', async (req, res) => {
   const { type, value } = req.query;
-  await pool.query(
-    'INSERT INTO dream_events (type, value) VALUES ($1, $2)',
-    [type, value]
-  );
-  console.log(`[存入] ${type}: ${value}`);
-  res.json({ ok: true, type, value });
+  await pool.query('INSERT INTO dream_events (type, value) VALUES ($1, $2)', [type, value]);
+  res.json({ ok: true });
 });
 
-// 每小时检查一次
 cron.schedule('0 * * * *', async () => {
   const result = await pool.query(
     `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '1 hour' ORDER BY created_at DESC LIMIT 5`
   );
   if (result.rows.length > 0) {
-    const summary = result.rows.map(r => `${r.type}: ${r.value}`).join('\n');
-    sendWeChat('苏清最近在做什么', summary);
-    console.log('[推送]', summary);
+    const comment = await askClaude(result.rows);
+    sendWeChat('苏清在干嘛', comment);
+    console.log('[推送]', comment);
   }
 });
 
 app.listen(3000, async () => {
   await initDB();
-  console.log('服务器启动，端口3000');
+  console.log('服务器启动');
 });
