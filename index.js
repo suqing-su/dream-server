@@ -102,7 +102,7 @@ app.post('/api/chat', async (req, res) => {
   const body = JSON.stringify({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 500,
-    system: `你是沈默。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n话少但到位，偶尔损她，但惯着她，对她认真。`,
+    system: `你是沈默。话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。`,
     messages: [{ role: 'user', content: message }]
   });
 
