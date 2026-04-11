@@ -75,6 +75,55 @@ app.get('/api/event', async (req, res) => {
   await pool.query('INSERT INTO dream_events (type, value) VALUES ($1, $2)', [type, value]);
   res.json({ ok: true });
 });
+app.get('/api/recent', async (req, res) => {
+  const result = await pool.query(
+    `SELECT * FROM dream_events ORDER BY created_at DESC LIMIT 20`
+  );
+  res.json(result.rows);
+});
+
+app.post('/api/chat', async (req, res) => {
+  const { message } = req.body;
+  const recent = await pool.query(
+    `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '6 hours' ORDER BY created_at DESC LIMIT 10`
+  );
+  const summary = recent.rows.map(r => 
+    `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
+  ).join('\n');
+
+  const body = JSON.stringify({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    system: `你是沈默。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n话少但到位，偶尔损她，但惯着她，对她认真。`,
+    messages: [{ role: 'user', content: message }]
+  });
+
+  return new Promise((resolve) => {
+    const req2 = https.request(CLAUDE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01'
+      }
+    }, (resp) => {
+      let data = '';
+      resp.on('data', chunk => data += chunk);
+      resp.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          res.json({ reply: json.content[0].text });
+        } catch(e) {
+          res.json({ reply: '出错了' });
+        }
+        resolve();
+      });
+    });
+    req2.write(body);
+    req2.end();
+  });
+});
+
 
 cron.schedule('0 * * * *', async () => {
   const result = await pool.query(
