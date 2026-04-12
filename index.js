@@ -130,6 +130,8 @@ app.post('/api/chat', async (req, res) => {
   const summary = recent.rows.map(r => 
     `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
   ).join('\n');
+
+
 app.get('/api/book/chapter', async (req, res) => {
   const { book, num } = req.query;
   const result = await pool.query(
@@ -205,9 +207,7 @@ app.post('/api/book/progress', async (req, res) => {
     req2.write(body);
     req2.end();
   });
-});
-
-
+  });
 cron.schedule('0 * * * *', async () => {
   const result = await pool.query(
     `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '1 hour' ORDER BY created_at DESC LIMIT 5`
