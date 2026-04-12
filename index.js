@@ -130,6 +130,49 @@ app.post('/api/chat', async (req, res) => {
   const summary = recent.rows.map(r => 
     `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
   ).join('\n');
+app.get('/api/book/chapter', async (req, res) => {
+  const { book, num } = req.query;
+  const result = await pool.query(
+    'SELECT * FROM book_chapters WHERE book=$1 AND chapter_num=$2',
+    [book, parseInt(num)]
+  );
+  res.json(result.rows[0] || null);
+});
+
+app.get('/api/book/list', async (req, res) => {
+  const result = await pool.query(
+    'SELECT DISTINCT book FROM book_chapters'
+  );
+  res.json(result.rows);
+});
+
+app.post('/api/book/note', async (req, res) => {
+  const { book, chapter_num, author, type, content } = req.body;
+  await pool.query(
+    'INSERT INTO book_notes (book, chapter_num, author, type, content) VALUES ($1,$2,$3,$4,$5)',
+    [book, chapter_num, author, type, content]
+  );
+  res.json({ ok: true });
+});
+
+app.get('/api/book/notes', async (req, res) => {
+  const { book, chapter_num } = req.query;
+  const result = await pool.query(
+    'SELECT * FROM book_notes WHERE book=$1 AND chapter_num=$2 ORDER BY created_at',
+    [book, parseInt(chapter_num)]
+  );
+  res.json(result.rows);
+});
+
+app.post('/api/book/progress', async (req, res) => {
+  const { book, author, chapter_num } = req.body;
+  await pool.query(
+    `INSERT INTO book_progress (book, author, chapter_num) VALUES ($1,$2,$3)
+     ON CONFLICT DO NOTHING`,
+    [book, author, chapter_num]
+  );
+  res.json({ ok: true });
+});
 
   const body = JSON.stringify({
     model: 'claude-haiku-4-5-20251001',
