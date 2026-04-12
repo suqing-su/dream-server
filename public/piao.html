@@ -334,13 +334,13 @@ async function loadChapter(num) {
           </div>
           <textarea class="note-textarea" id="noteInput" placeholder="写下你的想法..."></textarea>
 
-```
+
       <button class="note-submit" onclick="submitNote()">记录</button>
     </div>
     <div class="notes-list">${noteItems || '<div style="color:var(--text-dim);font-size:14px;">还没有笔记，来写第一条吧</div>'}</div>
   </div>
 `;
-```
+
 
 } catch(e) {
 document.getElementById('content').innerHTML = '<div class="loading">加载失败</div>';
