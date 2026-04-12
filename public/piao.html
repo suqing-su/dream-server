@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>飘 · 共读</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500&family=Space+Mono&display=swap');
+
+- { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+–bg: #f5f0e8;
+–paper: #faf7f2;
+–text: #2c2416;
+–text-dim: #8a7a5a;
+–accent: #8b4513;
+–accent-light: #d4a574;
+–border: #ddd5c0;
+–note-bg: #fffef5;
+}
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘Noto Serif SC’, serif;
+min-height: 100vh;
+}
+
+/* 顶部 */
+header {
+background: var(–paper);
+border-bottom: 2px solid var(–accent);
+padding: 16px 24px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+position: sticky;
+top: 0;
+z-index: 100;
+box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.book-title {
+font-size: 20px;
+color: var(–accent);
+letter-spacing: 0.2em;
+font-weight: 500;
+}
+
+.chapter-nav {
+display: flex;
+align-items: center;
+gap: 12px;
+}
+
+.nav-btn {
+background: none;
+border: 1px solid var(–accent-light);
+color: var(–accent);
+padding: 6px 14px;
+cursor: pointer;
+font-family: ‘Noto Serif SC’, serif;
+font-size: 13px;
+transition: all 0.2s;
+border-radius: 2px;
+}
+
+.nav-btn:hover { background: var(–accent); color: white; }
+.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.chapter-info {
+font-family: ‘Space Mono’, monospace;
+font-size: 12px;
+color: var(–text-dim);
+min-width: 80px;
+text-align: center;
+}
+
+/* 主体 */
+main {
+max-width: 720px;
+margin: 0 auto;
+padding: 40px 24px;
+}
+
+.chapter-title {
+font-size: 24px;
+text-align: center;
+margin-bottom: 32px;
+color: var(–accent);
+letter-spacing: 0.15em;
+padding-bottom: 16px;
+border-bottom: 1px solid var(–border);
+}
+
+.chapter-content {
+font-size: 17px;
+line-height: 2.2;
+color: var(–text);
+white-space: pre-wrap;
+word-break: break-all;
+}
+
+/* 笔记区 */
+.note-section {
+margin-top: 48px;
+padding-top: 32px;
+border-top: 1px solid var(–border);
+}
+
+.note-section h3 {
+font-size: 14px;
+color: var(–text-dim);
+letter-spacing: 0.2em;
+margin-bottom: 20px;
+font-family: ‘Space Mono’, monospace;
+}
+
+.note-input-area {
+display: flex;
+flex-direction: column;
+gap: 10px;
+margin-bottom: 24px;
+}
+
+.note-type-tabs {
+display: flex;
+gap: 8px;
+}
+
+.tab-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–text-dim);
+padding: 5px 14px;
+cursor: pointer;
+font-family: ‘Noto Serif SC’, serif;
+font-size: 13px;
+border-radius: 2px;
+transition: all 0.2s;
+}
+
+.tab-btn.active {
+background: var(–accent);
+border-color: var(–accent);
+color: white;
+}
+
+.note-textarea {
+background: var(–note-bg);
+border: 1px solid var(–border);
+color: var(–text);
+font-family: ‘Noto Serif SC’, serif;
+font-size: 15px;
+padding: 14px;
+resize: vertical;
+min-height: 100px;
+line-height: 1.8;
+outline: none;
+border-radius: 2px;
+transition: border-color 0.2s;
+}
+
+.note-textarea:focus { border-color: var(–accent-light); }
+
+.note-submit {
+align-self: flex-end;
+background: var(–accent);
+border: none;
+color: white;
+padding: 8px 20px;
+cursor: pointer;
+font-family: ‘Noto Serif SC’, serif;
+font-size: 14px;
+border-radius: 2px;
+transition: opacity 0.2s;
+}
+
+.note-submit:hover { opacity: 0.85; }
+
+/* 笔记列表 */
+.notes-list { display: flex; flex-direction: column; gap: 14px; }
+
+.note-item {
+background: var(–note-bg);
+border: 1px solid var(–border);
+border-left: 3px solid var(–accent-light);
+padding: 14px 16px;
+border-radius: 0 2px 2px 0;
+}
+
+.note-item.thought { border-left-color: var(–accent); }
+
+.note-meta {
+font-family: ‘Space Mono’, monospace;
+font-size: 11px;
+color: var(–text-dim);
+margin-bottom: 8px;
+display: flex;
+gap: 12px;
+}
+
+.note-content {
+font-size: 15px;
+line-height: 1.8;
+color: var(–text);
+}
+
+/* 加载状态 */
+.loading {
+text-align: center;
+padding: 60px;
+color: var(–text-dim);
+font-size: 15px;
+letter-spacing: 0.1em;
+}
+
+/* 作者选择 */
+.author-select {
+position: fixed;
+bottom: 20px;
+right: 20px;
+background: var(–paper);
+border: 1px solid var(–border);
+border-radius: 4px;
+padding: 8px;
+display: flex;
+gap: 6px;
+box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+
+.author-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–text-dim);
+padding: 4px 10px;
+cursor: pointer;
+font-family: ‘Noto Serif SC’, serif;
+font-size: 12px;
+border-radius: 2px;
+transition: all 0.2s;
+}
+
+.author-btn.active {
+background: var(–accent);
+border-color: var(–accent);
+color: white;
+}
+</style>
+
+</head>
+<body>
+
+<header>
+  <div class="book-title">飘</div>
+  <div class="chapter-nav">
+    <button class="nav-btn" id="prevBtn" onclick="changeChapter(-1)">← 上章</button>
+    <div class="chapter-info" id="chapterInfo">第 1 章</div>
+    <button class="nav-btn" id="nextBtn" onclick="changeChapter(1)">下章 →</button>
+  </div>
+</header>
+
+<main>
+  <div id="content">
+    <div class="loading">正在加载...</div>
+  </div>
+</main>
+
+<div class="author-select">
+  <button class="author-btn active" id="btn-suqing" onclick="setAuthor('苏清')">苏清</button>
+  <button class="author-btn" id="btn-shenmo" onclick="setAuthor('沈默')">沈默</button>
+</div>
+
+<script>
+const API = 'https://dream-server-production.up.railway.app';
+let currentChapter = 1;
+let totalChapters = 63;
+let currentAuthor = '苏清';
+let currentNoteType = 'note';
+
+function setAuthor(author) {
+  currentAuthor = author;
+  document.getElementById('btn-suqing').className = 'author-btn' + (author === '苏清' ? ' active' : '');
+  document.getElementById('btn-shenmo').className = 'author-btn' + (author === '沈默' ? ' active' : '');
+}
+
+function setNoteType(type) {
+  currentNoteType = type;
+  document.getElementById('tab-note').className = 'tab-btn' + (type === 'note' ? ' active' : '');
+  document.getElementById('tab-thought').className = 'tab-btn' + (type === 'thought' ? ' active' : '');
+}
+
+async function loadChapter(num) {
+  document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
+  document.getElementById('chapterInfo').textContent = `第 ${num} 章`;
+  document.getElementById('prevBtn').disabled = num <= 1;
+  document.getElementById('nextBtn').disabled = num >= totalChapters;
+
+  try {
+    const res = await fetch(`${API}/api/book/chapter?book=飘&num=${num}`);
+    const data = await res.json();
+
+    if (!data) {
+      document.getElementById('content').innerHTML = '<div class="loading">章节不存在</div>';
+      return;
+    }
+
+    const notesRes = await fetch(`${API}/api/book/notes?book=飘&chapter_num=${num}`);
+    const notes = await notesRes.json();
+
+    const noteItems = notes.map(n => `
+      <div class="note-item ${n.type === 'thought' ? 'thought' : ''}">
+        <div class="note-meta">
+          <span>${n.author}</span>
+          <span>${n.type === 'note' ? '笔记' : '读后感'}</span>
+          <span>${new Date(n.created_at).toLocaleDateString('zh-CN')}</span>
+        </div>
+        <div class="note-content">${n.content}</div>
+      </div>
+    `).join('');
+
+    document.getElementById('content').innerHTML = `
+      <div class="chapter-title">${data.title}</div>
+      <div class="chapter-content">${data.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      
+      <div class="note-section">
+        <h3>// 笔记与感想</h3>
+        <div class="note-input-area">
+          <div class="note-type-tabs">
+            <button class="tab-btn active" id="tab-note" onclick="setNoteType('note')">写笔记</button>
+            <button class="tab-btn" id="tab-thought" onclick="setNoteType('thought')">写读后感</button>
+          </div>
+          <textarea class="note-textarea" id="noteInput" placeholder="写下你的想法..."></textarea>
+
+```
+      <button class="note-submit" onclick="submitNote()">记录</button>
+    </div>
+    <div class="notes-list">${noteItems || '<div style="color:var(--text-dim);font-size:14px;">还没有笔记，来写第一条吧</div>'}</div>
+  </div>
+`;
+```
+
+} catch(e) {
+document.getElementById('content').innerHTML = '<div class="loading">加载失败</div>';
+}
+}
+
+async function submitNote() {
+const content = document.getElementById('noteInput').value.trim();
+if (!content) return;
+
+await fetch(`${API}/api/book/note`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+book: '飘',
+chapter_num: currentChapter,
+author: currentAuthor,
+type: currentNoteType,
+content
+})
+});
+
+loadChapter(currentChapter);
+}
+
+function changeChapter(dir) {
+const next = currentChapter + dir;
+if (next < 1 || next > totalChapters) return;
+currentChapter = next;
+loadChapter(currentChapter);
+window.scrollTo(0, 0);
+}
+
+loadChapter(1);
+</script>
+
+</body>
+</html>
