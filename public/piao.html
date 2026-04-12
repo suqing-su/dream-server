@@ -299,7 +299,7 @@ async function loadChapter(num) {
   document.getElementById('nextBtn').disabled = num >= totalChapters;
 
   try {
-    const res = await fetch(https://dream-server-production.up.railway.app/api/book/chapter?book=%E9%A3%98&chapter=1);
+    const res = await fetch(`${API}/api/book/chapter?book=%E9%A3%98&chapter=${num}`);
     const data = await res.json();
 
     if (!data) {
