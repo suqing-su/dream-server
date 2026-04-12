@@ -76,6 +76,38 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(`
+  CREATE TABLE IF NOT EXISTS book_chapters (
+    id SERIAL PRIMARY KEY,
+    book TEXT,
+    chapter_num INTEGER,
+    title TEXT,
+    content TEXT
+  )
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS book_notes (
+    id SERIAL PRIMARY KEY,
+    book TEXT,
+    chapter_num INTEGER,
+    author TEXT,
+    type TEXT,
+    content TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  )
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS book_progress (
+    id SERIAL PRIMARY KEY,
+    book TEXT,
+    author TEXT,
+    chapter_num INTEGER,
+    updated_at TIMESTAMP DEFAULT NOW()
+  )
+`);
+
 }
 
 app.get('/api/event', async (req, res) => {
