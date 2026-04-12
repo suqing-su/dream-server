@@ -133,7 +133,7 @@ req2.end();
 
 // 书架接口
 app.get('/api/book/chapter', async (req, res) => {
-const { book, num } = req.query;
+const { book, chapter: num } = req.query;
 const result = await pool.query(
 'SELECT * FROM book_chapters WHERE book=$1 AND chapter_num=$2',
 [book, parseInt(num)]
