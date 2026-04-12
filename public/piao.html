@@ -194,7 +194,7 @@ border-radius: 0 2px 2px 0;
 .note-item.thought { border-left-color: var(–accent); }
 
 .note-meta {
-font-family: ‘Space Mono’, monospace;
+font-family: 'Space Mono', monospace;
 font-size: 11px;
 color: var(–text-dim);
 margin-bottom: 8px;
@@ -299,7 +299,7 @@ async function loadChapter(num) {
   document.getElementById('nextBtn').disabled = num >= totalChapters;
 
   try {
-    const res = await fetch(`${API}/api/book/chapter?book=飘&num=${num}`);
+    const res = await fetch(`${API}/api/book/chapter?book=%E9%A3%98&num=${num}`);
     const data = await res.json();
 
     if (!data) {
@@ -307,7 +307,7 @@ async function loadChapter(num) {
       return;
     }
 
-    const notesRes = await fetch(`${API}/api/book/notes?book=飘&chapter_num=${num}`);
+    const notesRes = await fetch(`${API}/api/book/notes?book=%E9%A3%98&chapter_num=${num}`);
     const notes = await notesRes.json();
 
     const noteItems = notes.map(n => `
