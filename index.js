@@ -133,7 +133,6 @@ req2.end();
 
 // 书架接口
 app.get('/api/book/chapter', async (req, res) => {
-const { book, chapter: num } = req.query;
 const result = await pool.query(
 'SELECT * FROM book_chapters WHERE book=$1 AND chapter_num=$2',
 [book, parseInt(num)]
@@ -183,6 +182,75 @@ const comment = await askClaude(result.rows);
 sendWeChat('苏清在干嘛', comment);
 console.log('[推送]', comment);
 }
+});
+// 音乐接口
+const MUSIC_COOKIE = 'MUSIC_U=00C69C002F6980D07C0CF6F38B5D994201632677708EDCDB7C0B29D740E26D60B2AB627D3CEDD9FBC0ED54C14CA033F4A703DF8444C3FA5C0E04B7AD6FD7B5094ED0C1877246FBD5300FB49C606062F30984BA657C863FC3D54556D1174F1A0FD925E827B201BDB7F31CFEA5C6A74363B3296DAFB24A86969F3EC9B2EC4CC18DE1BB8332A1AF3F6962C766A27922C1E5BB5B2C106F891FD907185371AE4387FE292BEAD7313FFADFA6264A007FD76480ABB521A5AF4CFD792830B4C8C6ABBD5C9BA0313F930170BF9051306FE4CA17F3C8BBB620E322621216DDCC1C7735D2267FDB7ADC158FD420C54602CC2898F2B755FC91E5B4D5FCCE3224B1BE8D4780C798F72FB5BA8CFDE4633ADC23403C432A96E2CD19297D774D51789EA100C9FB2BF3C82C99CBB1FC6BCBB9519261E04900526236325EDDE7D536BED6ADAC9E05D2078803E9251AB2BC55F9A5610A8D841CADE4061D0F85513CE9F73A106A1FC62F845D46A1ED6BD2981782989CE3A22FFFD90AC9F8F5320BAA9E9CA734F030FB2DD4F72B5E93EF3ECAC7D56344C2E954C9B3C77DC812F958AE354560807E767F776A';
+
+function neteaseRequest(path) {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'music.163.com',
+      path: path,
+      method: 'GET',
+      headers: {
+        'Cookie': MUSIC_COOKIE,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://music.163.com/'
+      }
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+// 搜歌
+app.get('/api/music/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+  const data = await neteaseRequest(`/api/search?s=${encodeURIComponent(q)}&type=1&limit=8`);
+  if (!data || !data.result) return res.json([]);
+  const songs = (data.result.songs || []).map(s => ({
+    id: s.id,
+    name: s.name,
+    artist: s.artists.map(a => a.name).join('/'),
+    album: s.album.name
+  }));
+  res.json(songs);
+});
+
+// 获取播放链接
+app.get('/api/music/url', async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.json({ url: null });
+  const data = await neteaseRequest(`/api/song/enhance/player/url?id=${id}&ids=[${id}]&br=320000`);
+  if (!data || !data.data || !data.data[0]) return res.json({ url: null });
+  res.json({ url: data.data[0].url });
+});
+
+// 点歌（存到数据库，前端轮询）
+app.post('/api/music/pick', async (req, res) => {
+  const { song_id, song_name, artist } = req.body;
+  await pool.query(
+    'INSERT INTO dream_events (type, value) VALUES ($1, $2)',
+    ['music.pick', `${song_name} - ${artist} [${song_id}]`]
+  );
+  res.json({ ok: true });
+});
+
+// 查最新点歌
+app.get('/api/music/latest', async (req, res) => {
+  const result = await pool.query(
+    `SELECT * FROM dream_events WHERE type='music.pick' ORDER BY created_at DESC LIMIT 1`
+  );
+  res.json(result.rows[0] || null);
 });
 
 app.listen(3000, async () => {
