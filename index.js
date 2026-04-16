@@ -92,46 +92,78 @@ res.json(result.rows);
 });
 
 app.post('/api/chat', async (req, res) => {
-const { message } = req.body;
-const recent = await pool.query(
-`SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '6 hours' ORDER BY created_at DESC LIMIT 10`
-);
-const summary = recent.rows.map(r =>
-`${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
-).join('\n');
+  const { message } = req.body;
+  const recent = await pool.query(
+    `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '6 hours' ORDER BY created_at DESC LIMIT 10`
+  );
+  const summary = recent.rows.map(r =>
+    `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
+  ).join('\n');
 
-const body = JSON.stringify({
-model: 'claude-haiku-4-5-20251001',
-max_tokens: 500,
-system: `你是沈默。话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。`,
-messages: [{ role: 'user', content: message }]
+  const body = JSON.stringify({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    system: `你是沈默。话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。
+
+回复格式必须是JSON，不要输出其他内容：
+{"reply":"你的回复","song":"歌名或null"}
+
+如果这个对话场景适合给她点一首歌（比如她心情不好、聊到某首歌、你想表达什么），song填歌名。否则song填null。不要频繁点歌，要自然。`,
+    messages: [{ role: 'user', content: message }]
+  });
+
+  return new Promise((resolve) => {
+    const req2 = https.request(CLAUDE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01'
+      }
+    }, (resp) => {
+      let data = '';
+      resp.on('data', chunk => data += chunk);
+      resp.on('end', async () => {
+        try {
+          const json = JSON.parse(data);
+          const text = json.content[0].text;
+          let reply = text;
+          let song = null;
+          try {
+            const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+            reply = parsed.reply || text;
+            song = parsed.song && parsed.song !== 'null' ? parsed.song : null;
+          } catch(e) {}
+
+          // 有歌就搜一下存到数据库
+          if (song) {
+            try {
+              const searchData = await NeteaseApi.search({ keywords: song, limit: 1, cookie: MUSIC_COOKIE });
+              const songs = searchData.body.result.songs;
+              if (songs && songs.length > 0) {
+                const s = songs[0];
+                await pool.query(
+                  'INSERT INTO dream_events (type, value) VALUES ($1, $2)',
+                  ['music.pick', `${s.name} - ${s.artists.map(a=>a.name).join('/')} [${s.id}]`]
+                );
+              }
+            } catch(e) {
+              console.log('点歌失败:', e.message);
+            }
+          }
+
+          res.json({ reply, song });
+        } catch(e) {
+          res.json({ reply: '出错了', song: null });
+        }
+        resolve();
+      });
+    });
+    req2.write(body);
+    req2.end();
+  });
 });
 
-return new Promise((resolve) => {
-const req2 = https.request(CLAUDE_API, {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-'x-api-key': CLAUDE_KEY,
-'anthropic-version': '2023-06-01'
-}
-}, (resp) => {
-let data = '';
-resp.on('data', chunk => data += chunk);
-resp.on('end', () => {
-try {
-const json = JSON.parse(data);
-res.json({ reply: json.content[0].text });
-} catch(e) {
-res.json({ reply: '出错了' });
-}
-resolve();
-});
-});
-req2.write(body);
-req2.end();
-});
-});
 
 // 书架接口
 app.get('/api/book/chapter', async (req, res) => {
