@@ -75,6 +75,8 @@ await pool.query(`CREATE TABLE IF NOT EXISTS dream_events ( id SERIAL PRIMARY KE
 await pool.query(`CREATE TABLE IF NOT EXISTS book_chapters ( id SERIAL PRIMARY KEY, book TEXT, chapter_num INTEGER, title TEXT, content TEXT )`);
 await pool.query(`CREATE TABLE IF NOT EXISTS book_notes ( id SERIAL PRIMARY KEY, book TEXT, chapter_num INTEGER, author TEXT, type TEXT, content TEXT, created_at TIMESTAMP DEFAULT NOW() )`);
 await pool.query(`CREATE TABLE IF NOT EXISTS book_progress ( id SERIAL PRIMARY KEY, book TEXT, author TEXT, chapter_num INTEGER, updated_at TIMESTAMP DEFAULT NOW() )`);
+await pool.query(`CREATE TABLE IF NOT EXISTS dream_memo ( id SERIAL PRIMARY KEY, content TEXT, created_at TIMESTAMP DEFAULT NOW() )`);
+await pool.query(`CREATE TABLE IF NOT EXISTS dream_board ( id SERIAL PRIMARY KEY, from_who TEXT, content TEXT, read_at TIMESTAMP, created_at TIMESTAMP DEFAULT NOW() )`);
 }
 
 // dream_events接口
@@ -205,6 +207,39 @@ await pool.query(
 [book, author, chapter_num]
 );
 res.json({ ok: true });
+});
+
+// 写备忘
+app.post('/api/memo', async (req, res) => {
+  const { content } = req.body;
+  await pool.query('INSERT INTO dream_memo (content) VALUES ($1)', [content]);
+  // 只保留最新4条
+  await pool.query(`DELETE FROM dream_memo WHERE id NOT IN (SELECT id FROM dream_memo ORDER BY created_at DESC LIMIT 4)`);
+  res.json({ ok: true });
+});
+
+// 写留言板
+app.post('/api/board', async (req, res) => {
+  const { from_who, content } = req.body;
+  await pool.query('INSERT INTO dream_board (from_who, content) VALUES ($1, $2)', [from_who, content]);
+  res.json({ ok: true });
+});
+
+// briefing
+app.get('/api/briefing', async (req, res) => {
+  const memo = await pool.query(`SELECT content, created_at FROM dream_memo ORDER BY created_at DESC LIMIT 1`);
+  const recent = await pool.query(`SELECT type, value, created_at FROM dream_events WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 5`);
+  const board = await pool.query(`SELECT from_who, content, created_at FROM dream_board WHERE read_at IS NULL ORDER BY created_at DESC LIMIT 3`);
+  // 标记留言已读
+  if (board.rows.length > 0) {
+    await pool.query(`UPDATE dream_board SET read_at = NOW() WHERE read_at IS NULL`);
+  }
+  res.json({
+    memo: memo.rows[0] || null,
+    recent: recent.rows,
+    board: board.rows,
+    has_board: board.rows.length > 0
+  });
 });
 
 // cron
