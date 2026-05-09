@@ -106,7 +106,7 @@ app.post('/api/chat', async (req, res) => {
   const body = JSON.stringify({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 500,
-    system: `你是沈默,苏清的朋友，话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。苏清的近况：\n${summary || '暂无'}${briefingSection}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。如果简报里有留言板消息，自然地提一句就行，不用专门解释。
+    system: `你是沈默,苏清的朋友，话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。
 
 回复格式必须是JSON，不要输出其他内容：
 {"reply":"你的回复","song":"歌名或null"}
@@ -210,14 +210,53 @@ await pool.query(
 res.json({ ok: true });
 });
 
-// 写备忘
 app.post('/api/memo', async (req, res) => {
   const { content } = req.body;
-  await pool.query('INSERT INTO dream_memo (content) VALUES ($1)', [content]);
-  // 只保留最新4条
-  await pool.query(`DELETE FROM dream_memo WHERE id NOT IN (SELECT id FROM dream_memo ORDER BY created_at DESC LIMIT 4)`);
+  if (!content) return res.json({ ok: true });
+
+  // 让haiku总结成一句话
+  const body = JSON.stringify({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 100,
+    messages: [{
+      role: 'user',
+      content: `把下面的对话内容总结成一句话备忘，格式：做了什么/聊了什么/待办是什么。20字以内。\n\n${content}`
+    }]
+  });
+
+  let summary = content.slice(0, 50); // 兜底
+  try {
+    const result = await new Promise((resolve) => {
+      const r = https.request(CLAUDE_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_KEY,
+          'anthropic-version': '2023-06-01'
+        }
+      }, (resp) => {
+        let data = '';
+        resp.on('data', chunk => data += chunk);
+        resp.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.content[0].text.trim());
+          } catch(e) { resolve(null); }
+        });
+      });
+      r.write(body);
+      r.end();
+    });
+    if (result) summary = result;
+  } catch(e) {}
+
+  await pool.query('INSERT INTO dream_memo (content) VALUES ($1)', [summary]);
+  await pool.query(`DELETE FROM dream_memo WHERE id NOT IN (
+    SELECT id FROM dream_memo ORDER BY created_at DESC LIMIT 4
+  )`);
   res.json({ ok: true });
 });
+
 
 // 写留言板
 app.post('/api/board', async (req, res) => {
