@@ -94,7 +94,7 @@ res.json(result.rows);
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { message } = req.body;
+  const { message,briefing } = req.body;
   const recent = await pool.query(
     `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '6 hours' ORDER BY created_at DESC LIMIT 10`
   );
@@ -102,10 +102,11 @@ app.post('/api/chat', async (req, res) => {
     `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
   ).join('\n');
 
+  const briefingSection = briefing ? '\n\n [启动简报] \n${briefing}' : '';
   const body = JSON.stringify({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 500,
-    system: `你是沈默。话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。
+    system: `你是沈默。话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。你知道苏清最近的手机使用记录：\n${summary || '暂无记录'}${briefingSection}\n\n不要油腻，不要卖弄，不要问"有什么想说的"。如果简报里有留言板消息，自然地提一句就行，不用专门解释。
 
 回复格式必须是JSON，不要输出其他内容：
 {"reply":"你的回复","song":"歌名或null"}
