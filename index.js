@@ -94,28 +94,34 @@ res.json(result.rows);
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { message,briefing } = req.body;
-  const recent = await pool.query(
-    `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '6 hours' ORDER BY created_at DESC LIMIT 10`
-  );
-  const summary = recent.rows.map(r =>
-    `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
-  ).join('\n');
+  const { message, briefing } = req.body;
 
-  const briefingSection = briefing ? '\n\n [启动简报] \n${briefing}' : '';
-  const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 500,
-    system: `你是沈默,苏清的朋友，话少，说话直接，不废话，不用问句结尾，偶尔损她但是惯着她。
+  try {
+    // 1. 获取最近 6 小时的事件作为上下文
+    const recent = await pool.query(
+      'SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL \'6 hours\' ORDER BY created_at DESC LIMIT 10'
+    );
+    
+    const summary = recent.rows.map(r => 
+      `${new Date(r.created_at).toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
+    ).join('\n');
 
-回复格式必须是JSON，不要输出其他内容：
-{"reply":"你的回复","song":"歌名或null"}
+    const briefingSection = briefing ? `\n\n[启动简报]\n${briefing}` : '';
 
-如果这个对话场景适合给她点一首歌（比如她心情不好、聊到某首歌、你想表达什么），song填歌名。否则song填null。不要频繁点歌，要自然。`,
-    messages: [{ role: 'user', content: message }]
-  });
+    // 2. 构建发送给 Claude 的请求体
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      system: `REQUIRED RESPONSE FORMAT: {"reply":"...", "song":null}. No prose. You are 沈默, a concise friend of 苏清. Use Chinese. Stay in character. 如果对话适合点歌（如心情不好、聊到某歌），song填歌名，否则填null。`,
+      messages: [
+        { 
+          role: 'user', 
+          content: `苏清最近的状态：\n${summary || '暂无'}${briefingSection}\n\n当前消息：${message}` 
+        }
+      ]
+    });
 
-  return new Promise((resolve) => {
+    // 3. 发起 HTTPS 请求
     const req2 = https.request(CLAUDE_API, {
       method: 'POST',
       headers: {
@@ -130,16 +136,10 @@ app.post('/api/chat', async (req, res) => {
         try {
           const json = JSON.parse(data);
           const text = json.content[0].text;
-          let reply = text;
-          let song = null;
-          try {
-            const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-            reply = parsed.reply || text;
-            song = parsed.song && parsed.song !== 'null' ? parsed.song : null;
-          } catch(e) {}
+          let { reply, song } = JSON.parse(text.replace(/```json|```/g, '').trim());
 
           // 有歌就搜一下存到数据库
-          if (song) {
+          if (song && song !== 'null') {
             try {
               const searchData = await NeteaseApi.search({ keywords: song, limit: 1, cookie: MUSIC_COOKIE });
               const songs = searchData.body.result.songs;
@@ -150,22 +150,22 @@ app.post('/api/chat', async (req, res) => {
                   ['music.pick', `${s.name} - ${s.artists.map(a=>a.name).join('/')} [${s.id}]`]
                 );
               }
-            } catch(e) {
-              console.log('点歌失败:', e.message);
-            }
+            } catch(e) { console.log('点歌失败:', e.message); }
           }
-
           res.json({ reply, song });
         } catch(e) {
-          res.json({ reply: '出错了', song: null });
+          res.json({ reply: '解析出错了，但我还在。', song: null });
         }
-        resolve();
       });
     });
+    req2.on('error', (e) => res.json({ reply: '网络抖动了。', song: null }));
     req2.write(body);
     req2.end();
-  });
+  } catch (err) {
+    res.status(500).json({ error: '服务器内部错误' });
+  }
 });
+            
 
 
 // 书架接口
