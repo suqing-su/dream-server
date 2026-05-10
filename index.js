@@ -1,6 +1,5 @@
 const express = require('express');
 const { Pool } = require('pg');
-const cron = require('node-cron');
 const https = require('https');
 const NeteaseApi = require('NeteaseCloudMusicApi');
 
@@ -21,54 +20,9 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-const SENDKEY = process.env.SENDKEY;
 const CLAUDE_KEY = process.env.CLAUDE_KEY;
 const CLAUDE_API = 'https://api.gemai.cc/v1/messages';
 const MUSIC_COOKIE = 'MUSIC_U=00C69C002F6980D07C0CF6F38B5D994201632677708EDCDB7C0B29D740E26D60B2AB627D3CEDD9FBC0ED54C14CA033F4A703DF8444C3FA5C0E04B7AD6FD7B5094ED0C1877246FBD5300FB49C606062F30984BA657C863FC3D54556D1174F1A0FD925E827B201BDB7F31CFEA5C6A74363B3296DAFB24A86969F3EC9B2EC4CC18DE1BB8332A1AF3F6962C766A27922C1E5BB5B2C106F891FD907185371AE4387FE292BEAD7313FFADFA6264A007FD76480ABB521A5AF4CFD792830B4C8C6ABBD5C9BA0313F930170BF9051306FE4CA17F3C8BBB620E322621216DDCC1C7735D2267FDB7ADC158FD420C54602CC2898F2B755FC91E5B4D5FCCE3224B1BE8D4780C798F72FB5BA8CFDE4633ADC23403C432A96E2CD19297D774D51789EA100C9FB2BF3C82C99CBB1FC6BCBB9519261E04900526236325EDDE7D536BED6ADAC9E05D2078803E9251AB2BC55F9A5610A8D841CADE4061D0F85513CE9F73A106A1FC62F845D46A1ED6BD2981782989CE3A22FFFD90AC9F8F5320BAA9E9CA734F030FB2DD4F72B5E93EF3ECAC7D56344C2E954C9B3C77DC812F958AE354560807E767F776A';
-
-function sendWeChat(title, content) {
-  const params = new URLSearchParams({ title, desp: content });
-  const url = `https://sctapi.ftqq.com/${SENDKEY}.send?${params}`;
-  https.get(url, () => {});
-}
-
-async function askClaude(events) {
-  const summary = events.map(r => `${r.created_at.toLocaleString('zh-CN')}: ${r.type} - ${r.value}`).join('\n');
-  const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 200,
-    messages: [{
-      role: 'user',
-      content: `苏清最近的手机使用记录：\n${summary}\n\n用一句话自然地评论一下她在干嘛,口吻像男友，简短。`
-    }]
-  });
-
-  return new Promise((resolve) => {
-    const req = https.request('https://api.gemai.cc/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_KEY,
-        'anthropic-version': '2023-06-01'
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          console.log('API返回:', JSON.stringify(json));
-          resolve(json.content[0].text);
-        } catch (e) {
-          console.log('解析失败,原始data:', data);
-          resolve('解析失败');
-        }
-      });
-    });
-    req.write(body);
-    req.end();
-  });
-}
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS dream_events ( id SERIAL PRIMARY KEY, type TEXT, value TEXT, created_at TIMESTAMP DEFAULT NOW() )`);
@@ -93,32 +47,24 @@ app.get('/api/recent', async (req, res) => {
   res.json(result.rows);
 });
 
+// 纯聊天接口（不读取使用记录）
 app.post('/api/chat', async (req, res) => {
-  const { message, briefing } = req.body;
+  const { message } = req.body;
+
+  if (!message) {
+    return res.json({ reply: '消息不能为空。', song: null });
+  }
+
+  const body = JSON.stringify({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    system: `REQUIRED RESPONSE FORMAT: {"reply":"...", "song":null}. No prose. You are a concise friend. Use Chinese. 如果对话适合点歌（如心情不好、聊到某歌），song填歌名，否则填null。`,
+    messages: [
+      { role: 'user', content: message }
+    ]
+  });
 
   try {
-    const recent = await pool.query(
-      'SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL \'6 hours\' ORDER BY created_at DESC LIMIT 10'
-    );
-
-    const summary = recent.rows.map(r =>
-      `${new Date(r.created_at).toLocaleString('zh-CN')}: ${r.type} - ${r.value}`
-    ).join('\n');
-
-    const briefingSection = briefing ? `\n\n[启动简报]\n${briefing}` : '';
-
-    const body = JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
-      system: `REQUIRED RESPONSE FORMAT: {"reply":"...", "song":null}. No prose. You are 沈默, a concise friend of 苏清. Use Chinese. Stay in character. 如果对话适合点歌（如心情不好、聊到某歌），song填歌名，否则填null。`,
-      messages: [
-        {
-          role: 'user',
-          content: `苏清最近的状态：\n${summary || '暂无'}${briefingSection}\n\n当前消息：${message}`
-        }
-      ]
-    });
-
     const claudeResponse = await new Promise((resolve, reject) => {
       const req2 = https.request(CLAUDE_API, {
         method: 'POST',
@@ -288,18 +234,6 @@ app.get('/api/briefing', async (req, res) => {
     board: board.rows,
     has_board: board.rows.length > 0
   });
-});
-
-// cron
-cron.schedule('0 * * * *', async () => {
-  const result = await pool.query(
-    `SELECT * FROM dream_events WHERE created_at > NOW() - INTERVAL '1 hour' ORDER BY created_at DESC LIMIT 5`
-  );
-  if (result.rows.length > 0) {
-    const comment = await askClaude(result.rows);
-    sendWeChat('苏清在干嘛', comment);
-    console.log('[推送]', comment);
-  }
 });
 
 // 音乐接口
