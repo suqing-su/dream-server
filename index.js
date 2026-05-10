@@ -138,8 +138,28 @@ app.post('/api/chat', async (req, res) => {
           const text = json.content[0].text;
           let { reply, song } = JSON.parse(text.replace(/```json|```/g, '').trim());
 
+                resp.on('end', async () => {
+        try {
+          const json = JSON.parse(data);
+          const text = json.content[0].text;
+          
+          let reply = text;
+          let song = null;
+
+          try {
+            // 改进：使用正则从文本中精准提取第一个 {} 块，防止 Markdown 干扰
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0].trim());
+              reply = parsed.reply || text;
+              song = (parsed.song && parsed.song !== 'null') ? parsed.song : null;
+            }
+          } catch(e) {
+            console.log('局部解析失败，直接使用原文');
+          }
+
           // 有歌就搜一下存到数据库
-          if (song && song !== 'null') {
+          if (song) {
             try {
               const searchData = await NeteaseApi.search({ keywords: song, limit: 1, cookie: MUSIC_COOKIE });
               const songs = searchData.body.result.songs;
@@ -157,7 +177,7 @@ app.post('/api/chat', async (req, res) => {
           res.json({ reply: '解析出错了，但我还在。', song: null });
         }
       });
-    });
+
     req2.on('error', (e) => res.json({ reply: '网络抖动了。', song: null }));
     req2.write(body);
     req2.end();
