@@ -425,6 +425,10 @@ async function send() {
     updateTurnCounter();
     checkTurnWarning();
     if (data.song) showSongBanner(data.song);
+    if (data.audio) {
+      const ttsAudio = new Audio("data:audio/mpeg;base64," + data.audio);
+      ttsAudio.play().catch(() => {});
+    }
     // 第一条发完之后briefing只用一次，清掉留言板标记（避免每条消息都带）
     if (briefingContext) briefingContext.board = [];
   } catch(e) {

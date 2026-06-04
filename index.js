@@ -22,7 +22,40 @@ const pool = new Pool({
 
 const CLAUDE_KEY = process.env.CLAUDE_KEY;
 const CLAUDE_API = 'https://api.gemai.cc/v1/messages';
+const ELEVENLABS_KEY = process.env.ELEVENLABS_KEY;
+const ELEVENLABS_VOICE = process.env.ELEVENLABS_VOICE || 'Xb7hH8MSUJpSbSDYk0k2'; // Alice - multilingual, good at Chinese
 const MUSIC_COOKIE = 'MUSIC_U=00C69C002F6980D07C0CF6F38B5D994201632677708EDCDB7C0B29D740E26D60B2AB627D3CEDD9FBC0ED54C14CA033F4A703DF8444C3FA5C0E04B7AD6FD7B5094ED0C1877246FBD5300FB49C606062F30984BA657C863FC3D54556D1174F1A0FD925E827B201BDB7F31CFEA5C6A74363B3296DAFB24A86969F3EC9B2EC4CC18DE1BB8332A1AF3F6962C766A27922C1E5BB5B2C106F891FD907185371AE4387FE292BEAD7313FFADFA6264A007FD76480ABB521A5AF4CFD792830B4C8C6ABBD5C9BA0313F930170BF9051306FE4CA17F3C8BBB620E322621216DDCC1C7735D2267FDB7ADC158FD420C54602CC2898F2B755FC91E5B4D5FCCE3224B1BE8D4780C798F72FB5BA8CFDE4633ADC23403C432A96E2CD19297D774D51789EA100C9FB2BF3C82C99CBB1FC6BCBB9519261E04900526236325EDDE7D536BED6ADAC9E05D2078803E9251AB2BC55F9A5610A8D841CADE4061D0F85513CE9F73A106A1FC62F845D46A1ED6BD2981782989CE3A22FFFD90AC9F8F5320BAA9E9CA734F030FB2DD4F72B5E93EF3ECAC7D56344C2E954C9B3C77DC812F958AE354560807E767F776A';
+
+async function tts(text) {
+  if (!ELEVENLABS_KEY) return null;
+  try {
+    const body = JSON.stringify({
+      text,
+      model_id: 'eleven_multilingual_v2',
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+    });
+    const result = await new Promise((resolve, reject) => {
+      const r = https.request(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_KEY
+        }
+      }, (resp) => {
+        const chunks = [];
+        resp.on('data', c => chunks.push(c));
+        resp.on('end', () => resolve(Buffer.concat(chunks).toString('base64')));
+      });
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+    return result;
+  } catch (e) {
+    console.log('TTS失败:', e.message);
+    return null;
+  }
+}
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS dream_events ( id SERIAL PRIMARY KEY, type TEXT, value TEXT, created_at TIMESTAMP DEFAULT NOW() )`);
@@ -104,21 +137,26 @@ app.post('/api/chat', async (req, res) => {
       console.log('JSON提取失败，使用原始回复');
     }
 
-    if (song) {
-      try {
-        const searchData = await NeteaseApi.search({ keywords: song, limit: 1, cookie: MUSIC_COOKIE });
-        const songs = searchData.body.result.songs;
-        if (songs && songs.length > 0) {
-          const s = songs[0];
-          await pool.query(
-            'INSERT INTO dream_events (type, value) VALUES ($1, $2)',
-            ['music.pick', `${s.name} - ${s.artists.map(a => a.name).join('/')} [${s.id}]`]
-          );
+    const [audio] = await Promise.all([
+      tts(reply),
+      (async () => {
+        if (song) {
+          try {
+            const searchData = await NeteaseApi.search({ keywords: song, limit: 1, cookie: MUSIC_COOKIE });
+            const songs = searchData.body.result.songs;
+            if (songs && songs.length > 0) {
+              const s = songs[0];
+              await pool.query(
+                'INSERT INTO dream_events (type, value) VALUES ($1, $2)',
+                ['music.pick', `${s.name} - ${s.artists.map(a => a.name).join('/')} [${s.id}]`]
+              );
+            }
+          } catch (e) { console.log('点歌失败:', e.message); }
         }
-      } catch (e) { console.log('点歌失败:', e.message); }
-    }
+      })()
+    ]);
 
-    res.json({ reply, song });
+    res.json({ reply, song, audio });
   } catch (err) {
     console.error('/api/chat 错误:', err.message);
     res.json({ reply: '网络抖动了。', song: null });
