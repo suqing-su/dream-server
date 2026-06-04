@@ -283,6 +283,9 @@ app.get('/api/music/latest', async (req, res) => {
   res.json(result.rows[0] || null);
 });
 
+app.get('/chat.html', (_, res) => res.sendFile(__dirname + '/chat.html'));
+app.get('/', (_, res) => res.sendFile(__dirname + '/chat.html'));
+
 app.listen(3000, async () => {
   await initDB();
   console.log('服务器启动');
