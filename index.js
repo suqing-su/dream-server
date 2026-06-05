@@ -324,6 +324,47 @@ app.get('/api/music/latest', async (req, res) => {
 app.get('/chat.html', (_, res) => res.sendFile(__dirname + '/chat.html'));
 app.get('/', (_, res) => res.sendFile(__dirname + '/chat.html'));
 
+app.post('/api/tts', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'no text' });
+
+  const ELABS_KEY = process.env.ELEVENLABS_KEY;
+  const VOICE_ID = 'asKUjgIJvAJ5Xr2sDV1F';
+
+  const body = JSON.stringify({
+    text,
+    model_id: 'eleven_multilingual_v2',
+    voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+  });
+
+  try {
+    const audioData = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'api.elevenlabs.io',
+        path: `/v1/text-to-speech/${VOICE_ID}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': ELABS_KEY
+        }
+      }, (resp) => {
+        const chunks = [];
+        resp.on('data', chunk => chunks.push(chunk));
+        resp.on('end', () => resolve(Buffer.concat(chunks)));
+      });
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(audioData);
+  } catch (e) {
+    console.error('TTS失败:', e.message);
+    res.status(500).json({ error: 'tts failed' });
+  }
+});
+
 app.listen(3000, async () => {
   await initDB();
   console.log('服务器启动');
