@@ -20,6 +20,7 @@ docker run -d \
   -p 3000:3000 \
   -e DATABASE_URL="${DATABASE_URL}" \
   -e CLAUDE_KEY="${CLAUDE_KEY}" \
+  -e ELEVENLABS_KEY="${ELEVENLABS_KEY}" \
   dream-server
 
 echo ">>> Done! App running on port 3000"
