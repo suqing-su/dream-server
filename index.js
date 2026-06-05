@@ -17,7 +17,8 @@ app.use((req, res, next) => {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: false
+  ssl: { rejectUnauthorized: false }
+
 });
 
 const CLAUDE_KEY = process.env.CLAUDE_KEY;
