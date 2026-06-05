@@ -280,6 +280,7 @@ let turnCount = 0;
 let pendingSong = null;
 let briefingContext = null; // 存briefing结果，发消息时带上
 const audio = document.getElementById('audio-player');
+let ttsSourceUrl = null;
 
 function updateTurnCounter() {
   const el = document.getElementById('turn-counter');
@@ -404,6 +405,10 @@ async function send() {
   const input = document.getElementById('input');
   const text = input.value.trim();
   if (!text) return;
+  // Prime audio for iOS: unlock audio context during user gesture
+  audio.play().catch(() => {});
+  audio.pause();
+  audio.currentTime = 0;
   input.value = '';
   input.style.height = 'auto';
   document.getElementById('send').disabled = true;
@@ -425,10 +430,8 @@ async function send() {
     updateTurnCounter();
     checkTurnWarning();
     if (data.song) showSongBanner(data.song);
-    if (data.audio) {
-      const ttsAudio = new Audio("data:audio/mpeg;base64," + data.audio);
-      ttsAudio.play().catch(() => {});
-    }
+    // TTS: send reply text to /api/tts and auto-play
+    playTTS(reply);
     // 第一条发完之后briefing只用一次，清掉留言板标记（避免每条消息都带）
     if (briefingContext) briefingContext.board = [];
   } catch(e) {
@@ -437,6 +440,26 @@ async function send() {
   }
   document.getElementById('send').disabled = false;
   input.focus();
+}
+
+async function playTTS(text) {
+  try {
+    const res = await fetch(`${API}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    if (ttsSourceUrl) URL.revokeObjectURL(ttsSourceUrl);
+    ttsSourceUrl = URL.createObjectURL(blob);
+    audio.src = ttsSourceUrl;
+    audio.play().catch(() => {});
+    document.getElementById('np-name').textContent = '沈默';
+    document.getElementById('np-artist').textContent = '语音回复';
+    document.getElementById('now-playing').classList.add('visible');
+    document.getElementById('np-playpause').textContent = '⏸';
+  } catch(e) {}
 }
 
 function toggleMusicPanel() {
@@ -501,6 +524,9 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('ended', () => {
   document.getElementById('np-playpause').textContent = '▶';
   document.getElementById('np-progress-fill').style.width = '0%';
+  if (ttsSourceUrl && audio.src === ttsSourceUrl) {
+    document.getElementById('now-playing').classList.remove('visible');
+  }
 });
 
 document.getElementById('np-progress').addEventListener('click', (e) => {
