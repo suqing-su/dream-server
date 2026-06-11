@@ -21,8 +21,9 @@ const pool = new Pool({
 
 });
 
-const CLAUDE_KEY = process.env.CLAUDE_KEY;
-const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+const AI_KEY = process.env.CLAUDE_KEY;
+const AI_API = 'https://api.gemai.cc/v1/chat/completions';
+const AI_MODEL = 'gpt-4o-mini';
 const ELEVENLABS_KEY = process.env.ELEVENLABS_KEY;
 const ELEVENLABS_VOICE = process.env.ELEVENLABS_VOICE || 'Xb7hH8MSUJpSbSDYk0k2'; // Alice - multilingual, good at Chinese
 const MUSIC_COOKIE = 'MUSIC_U=00C69C002F6980D07C0CF6F38B5D994201632677708EDCDB7C0B29D740E26D60B2AB627D3CEDD9FBC0ED54C14CA033F4A703DF8444C3FA5C0E04B7AD6FD7B5094ED0C1877246FBD5300FB49C606062F30984BA657C863FC3D54556D1174F1A0FD925E827B201BDB7F31CFEA5C6A74363B3296DAFB24A86969F3EC9B2EC4CC18DE1BB8332A1AF3F6962C766A27922C1E5BB5B2C106F891FD907185371AE4387FE292BEAD7313FFADFA6264A007FD76480ABB521A5AF4CFD792830B4C8C6ABBD5C9BA0313F930170BF9051306FE4CA17F3C8BBB620E322621216DDCC1C7735D2267FDB7ADC158FD420C54602CC2898F2B755FC91E5B4D5FCCE3224B1BE8D4780C798F72FB5BA8CFDE4633ADC23403C432A96E2CD19297D774D51789EA100C9FB2BF3C82C99CBB1FC6BCBB9519261E04900526236325EDDE7D536BED6ADAC9E05D2078803E9251AB2BC55F9A5610A8D841CADE4061D0F85513CE9F73A106A1FC62F845D46A1ED6BD2981782989CE3A22FFFD90AC9F8F5320BAA9E9CA734F030FB2DD4F72B5E93EF3ECAC7D56344C2E954C9B3C77DC812F958AE354560807E767F776A';
@@ -90,22 +91,21 @@ app.post('/api/chat', async (req, res) => {
   }
 
   const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
+    model: AI_MODEL,
     max_tokens: 500,
-    system: `REQUIRED RESPONSE FORMAT: {"reply":"...", "song":null}. No prose. You are a concise friend. Use Chinese. 如果对话适合点歌（如心情不好、聊到某歌），song填歌名，否则填null。`,
     messages: [
+      { role: 'system', content: `REQUIRED RESPONSE FORMAT: {"reply":"...", "song":null}. No prose. You are a concise friend. Use Chinese. 如果对话适合点歌（如心情不好、聊到某歌），song填歌名，否则填null。` },
       { role: 'user', content: message }
     ]
   });
 
   try {
     const claudeResponse = await new Promise((resolve, reject) => {
-      const req2 = https.request(CLAUDE_API, {
+      const req2 = https.request(AI_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_KEY,
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${AI_KEY}`
         }
       }, (resp) => {
         let data = '';
@@ -113,7 +113,7 @@ app.post('/api/chat', async (req, res) => {
         resp.on('end', () => {
           try {
             const json = JSON.parse(data);
-            resolve(json.content[0].text);
+            resolve(json.choices[0].message.content);
           } catch (e) {
             reject(new Error('API响应解析失败'));
           }
@@ -211,7 +211,7 @@ app.post('/api/memo', async (req, res) => {
   if (!content) return res.json({ ok: true });
 
   const body = JSON.stringify({
-    model: 'claude-haiku-4-5-20251001',
+    model: AI_MODEL,
     max_tokens: 100,
     messages: [{
       role: 'user',
@@ -222,12 +222,11 @@ app.post('/api/memo', async (req, res) => {
   let summary = content.slice(0, 50);
   try {
     const result = await new Promise((resolve) => {
-      const r = https.request(CLAUDE_API, {
+      const r = https.request(AI_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_KEY,
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${AI_KEY}`
         }
       }, (resp) => {
         let data = '';
@@ -235,7 +234,7 @@ app.post('/api/memo', async (req, res) => {
         resp.on('end', () => {
           try {
             const json = JSON.parse(data);
-            resolve(json.content[0].text.trim());
+            resolve(json.choices[0].message.content.trim());
           } catch (e) { resolve(null); }
         });
       });
